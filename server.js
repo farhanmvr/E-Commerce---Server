@@ -1,8 +1,12 @@
+const fs = require('fs');
 const express = require('express');
 const mongoose = require('mongoose');
 const morgan = require('morgan');
 const cors = require('cors');
 const dotenv = require('dotenv');
+
+const AppError = require('./utils/appError');
+const globalErrorHandler = require('./controllers/errorController');
 
 // dotenv
 dotenv.config({ path: './.env' });
@@ -15,7 +19,7 @@ mongoose
   .connect(process.env.DATABASE, {
     useNewUrlParser: true,
     useCreateIndex: true,
-    useFindAndModify: true,
+    useFindAndModify: false,
     useUnifiedTopology: true,
   })
   .then(() => console.log(`DB CONNECTED`))
@@ -23,18 +27,24 @@ mongoose
 
 // middlewares
 app.use(morgan('dev'));
-app.use(express.json({ limit: '10kb' }));
+app.use(express.json({ limit: '10mb' }));
 app.use(cors());
 
-// route
-app.get('/api', (req, res) => {
-  res.json({
-    data: 'done',
-  });
+// routes middlewares
+fs.readdirSync('./routes').map((r) =>
+  app.use('/api', require(`./routes/${r}`))
+);
+
+// Handle error for unknown route
+app.all('*', (req, res, next) => {
+  next(new AppError(`Can't find ${req.originalUrl} on this server!`, 404));
 });
 
+// Error handling middleware
+app.use(globalErrorHandler);
+
 // Set server PORT
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 8000;
 app.listen(PORT, () => {
   console.log(`Server listening to PORT ${PORT}`);
 });
