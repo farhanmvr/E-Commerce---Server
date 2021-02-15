@@ -1,6 +1,7 @@
 const slugify = require('slugify');
 
 const SubCategory = require('../models/subCategoryModel');
+const Product = require('../models/productModel');
 const catchAsync = require('../utils/catchAsync');
 const AppError = require('../utils/appError');
 
@@ -43,9 +44,13 @@ exports.list = catchAsync(async (req, res, next) => {
 exports.read = catchAsync(async (req, res, next) => {
   const subCategory = await SubCategory.findOne({ slug: req.params.slug });
   if (!subCategory) return next(new AppError('Invalid slug name'));
+  const products = await Product.find({ subs: subCategory })
+    .populate('category')
+    .exec();
   res.status(200).json({
     status: 'success',
     subCategory,
+    products,
   });
 });
 

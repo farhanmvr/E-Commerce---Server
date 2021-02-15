@@ -1,7 +1,7 @@
 const slugify = require('slugify');
 const Product = require('../models/productModel');
+const User = require('../models/userModel');
 const AppError = require('../utils/appError');
-
 const catchAsync = require('../utils/catchAsync');
 
 exports.create = catchAsync(async (req, res, next) => {
@@ -92,8 +92,128 @@ exports.list = catchAsync(async (req, res, next) => {
 
 exports.productsCount = catchAsync(async (req, res, next) => {
   const total = await Product.find({}).estimatedDocumentCount();
-  res.json({
+  res.status(200).json({
     status: 'success',
     total,
   });
+});
+
+exports.listRelated = catchAsync(async (req, res, next) => {
+  const product = await Product.findById(req.params.productId).exec();
+  const relatedProducts = await Product.find({
+    _id: { $ne: product._id },
+    category: product.category,
+  })
+    .limit(8)
+    .populate('category')
+    .populate('subs')
+    .populate('postedBy')
+    .exec();
+  res.status(200).json({
+    status: 'success',
+    products: relatedProducts ? relatedProducts : {},
+  });
+});
+
+exports.productStar = catchAsync(async (req, res, next) => {
+  const product = await Product.findById(req.params.productId).exec();
+  const user = await User.findOne({ email: req.user.email }).exec();
+  const { star } = req.body;
+
+  // who is updating
+  // check if currently logged in user have already added rating
+  const existingRatingObject = product.ratings.find(
+    (el) => el.postedBy.toString() === user._id.toString()
+  );
+
+  if (!existingRatingObject) {
+    // if user haven't left rating, push it
+    const ratingAdded = await Product.findByIdAndUpdate(
+      product._id,
+      {
+        $push: { ratings: { star, postedBy: user._id } },
+      },
+      { new: true }
+    ).exec();
+  } else {
+    // if user have already rated, update
+    const ratingUpdated = await Product.updateOne(
+      {
+        ratings: { $elemMatch: existingRatingObject },
+      },
+      {
+        $set: { 'ratings.$.star': star },
+      },
+      { new: true }
+    ).exec();
+  }
+  res.status(200).json({
+    status: 'success',
+  });
+});
+
+// SEARCH / FILTERS
+const handleQuery = async (req, res, query) => {
+  const products = await Product.find({ $text: { $search: query } })
+    .populate('category', '_id name')
+    .populate('subs', '_id name')
+    .populate('postedBy', '_id name')
+    .exec();
+
+  res.json({
+    status: 'success',
+    products,
+  });
+};
+
+const handlePrice = async (req, res, price) => {
+  try {
+    const products = await Product.find({
+      price: {
+        $gte: price[0],
+        $lte: price[1],
+      },
+    })
+      .populate('category', '_id name')
+      .populate('subs', '_id name')
+      .populate('postedBy', '_id name')
+      .exec();
+
+    res.json({
+      products,
+    });
+  } catch (err) {
+    throw err;
+  }
+};
+
+const handleCategory = async (req, res, category) => {
+  try {
+    const products = await Product.find({ category })
+      .populate('category', '_id name')
+      .populate('subs', '_id name')
+      .populate('postedBy', '_id name')
+      .exec();
+
+    res.json({
+      status: 'success',
+      products,
+    });
+  } catch (err) {
+    throw err;
+  }
+};
+
+exports.searchFilters = catchAsync(async (req, res, next) => {
+  const { query, price, category } = req.body;
+
+  if (query) {
+    await handleQuery(req, res, query);
+  }
+  if (price) {
+    await handlePrice(req, res, price);
+  }
+  if (category) {
+    await handleCategory(req, res, category);
+  }
 });
