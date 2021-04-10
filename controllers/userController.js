@@ -31,7 +31,6 @@ exports.userCart = catchAsync(async (req, res) => {
   const newCart = await Cart.create({
     products,
     cartTotal: total,
-    totalAfterDiscount: total,
     orderedBy: user._id,
   });
 
@@ -71,10 +70,6 @@ exports.applyCouponToUserCart = catchAsync(async (req, res, next) => {
   const { coupon } = req.body;
   const validCoupon = await Coupon.findOne({ name: coupon });
   if (!validCoupon) {
-    // return res.status(404).json({
-    //   status: 'failed',
-    //   message: 'Invalid Coupon',
-    // });
     return next(new AppError('Invalid coupon', 404));
   }
   const user = await User.findOne({ email: req.user.email });
@@ -89,7 +84,7 @@ exports.applyCouponToUserCart = catchAsync(async (req, res, next) => {
     (cartTotal * validCoupon.discount) / 100
   ).toFixed(2);
 
-  Cart.findOneAndUpdate(
+  await Cart.findOneAndUpdate(
     { orderedBy: user._id },
     { totalAfterDiscount },
     { new: true }
