@@ -136,3 +136,36 @@ exports.orders = catchAsync(async (req, res, next) => {
 
   res.status(200).json({ status: 'success', orders });
 });
+
+// WISHLIST
+exports.addToWishList = catchAsync(async (req, res, next) => {
+  const { productId } = req.body;
+  await User.findOneAndUpdate(
+    { email: req.user.email },
+    { $addToSet: { wishlist: productId } }
+  );
+
+  res.status(200).json({
+    status: 'success',
+  });
+});
+
+exports.wishlist = catchAsync(async (req, res, next) => {
+  const {wishlist} = await User.findOne({ email: req.user.email })
+    .select('wishlist')
+    .populate('wishlist');
+
+  res.status(200).json({
+    status: 'success',
+    wishlist,
+  });
+});
+
+exports.removeFromWishlist = catchAsync(async (req, res, next) => {
+  const { productId } = req.params;
+  await User.findOneAndUpdate(
+    { email: req.user.email },
+    { $pull: { wishlist: productId } }
+  );
+  res.status(202).json({ status: 'success' });
+});
