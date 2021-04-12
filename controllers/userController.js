@@ -1,6 +1,7 @@
 const User = require('../models/userModel');
 const Product = require('../models/productModel');
 const Cart = require('../models/cartModel');
+const Order = require('../models/orderModel');
 const Coupon = require('../models/couponModel');
 const catchAsync = require('../utils/catchAsync');
 const AppError = require('../utils/appError');
@@ -94,4 +95,44 @@ exports.applyCouponToUserCart = catchAsync(async (req, res, next) => {
     status: 'success',
     totalAfterDiscount,
   });
+});
+
+exports.createOrder = catchAsync(async (req, res, next) => {
+  const { paymentIntent } = req.body.stripeResponse;
+  const user = await User.findOne({ email: req.user.email });
+
+  const { products } = await Cart.findOne({ orderedBy: user._id });
+
+  const newOrder = await Order.create({
+    products,
+    paymentIntent,
+    orderedBy: user._id,
+  });
+
+  // Decrement the quantity, Increment sold
+  let bultOption = products.map((item) => {
+    return {
+      updateOne: {
+        filter: { _id: item.product._id }, // IMPORTANT item.product
+        update: { $inc: { quantity: -item.count, sold: +item.count } },
+      },
+    };
+  });
+
+  await Product.bulkWrite(bultOption, {});
+
+  // Empty cart
+  await Cart.findOneAndRemove({ orderedBy: user._id });
+
+  res.status(200).json({ status: 'success', newOrder });
+});
+
+exports.orders = catchAsync(async (req, res, next) => {
+  const user = await User.findOne({ email: req.user.email });
+
+  const orders = await Order.find({ orderedBy: user._id }).populate(
+    'products.product'
+  );
+
+  res.status(200).json({ status: 'success', orders });
 });
