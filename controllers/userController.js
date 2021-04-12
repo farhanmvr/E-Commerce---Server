@@ -130,9 +130,9 @@ exports.createOrder = catchAsync(async (req, res, next) => {
 exports.orders = catchAsync(async (req, res, next) => {
   const user = await User.findOne({ email: req.user.email });
 
-  const orders = await Order.find({ orderedBy: user._id }).populate(
-    'products.product'
-  );
+  const orders = await Order.find({ orderedBy: user._id })
+    .sort('-createdAt')
+    .populate('products.product');
 
   res.status(200).json({ status: 'success', orders });
 });
